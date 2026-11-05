@@ -1,0 +1,10 @@
+# build output
+[Bb]in/
+[Oo]bj/
+
+# test results
+TestResults/
+
+# user-specific files
+*.user
+*.DotSettings.user
