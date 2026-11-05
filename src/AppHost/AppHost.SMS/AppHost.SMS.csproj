@@ -9,4 +9,16 @@
         <UserSecretsId>56235b26-897a-4114-ac6a-e61a8acefd80</UserSecretsId>
     </PropertyGroup>
 
+    <ItemGroup>
+      <PackageReference Include="Aspire.Hosting.PostgreSQL" Version="13.6.4" />
+      <PackageReference Include="Aspire.Hosting.RabbitMQ" Version="13.6.4" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\..\SMS.Publishing\SMS.Publishing.csproj" />
+      <ProjectReference Include="..\..\SMS.Sender\SMS.Sender.csproj" />
+      <ProjectReference Include="..\..\SMS.API\SMS.API.csproj" />
+      <ProjectReference Include="..\..\SMS.Web\SMS.Web.csproj" />
+    </ItemGroup>
+
 </Project>
