@@ -1,0 +1,67 @@
+﻿@inherits LayoutComponentBase
+
+<MudThemeProvider Theme="_theme" @bind-IsDarkMode="_isDarkMode" />
+<MudPopoverProvider />
+<MudDialogProvider />
+<MudSnackbarProvider />
+
+<MudLayout>
+    <MudAppBar Elevation="1">
+        <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start"
+                       aria-label="Toggle navigation" OnClick="ToggleDrawer" />
+        <MudIcon Icon="@Icons.Material.Filled.Sms" Class="ml-2 mr-2" />
+        <MudText Typo="Typo.h6">SMS.Web</MudText>
+        <MudSpacer />
+        <MudTooltip Text="@(_isDarkMode ? "Light mode" : "Dark mode")">
+            <MudIconButton Icon="@(_isDarkMode ? Icons.Material.Filled.LightMode : Icons.Material.Filled.DarkMode)"
+                           Color="Color.Inherit" aria-label="Toggle dark mode"
+                           OnClick="() => _isDarkMode = !_isDarkMode" />
+        </MudTooltip>
+    </MudAppBar>
+
+    <MudDrawer @bind-Open="_drawerOpen" ClipMode="DrawerClipMode.Always" Elevation="1">
+        <NavMenu />
+    </MudDrawer>
+
+    <MudMainContent>
+        <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="py-6">
+            @Body
+        </MudContainer>
+    </MudMainContent>
+</MudLayout>
+
+@code {
+    private bool _drawerOpen = true;
+    private bool _isDarkMode;
+
+    private readonly MudTheme _theme = new()
+    {
+        PaletteLight = new PaletteLight
+        {
+            Primary = "#1b6ec2",
+            AppbarBackground = "#1b6ec2",
+            Background = "#f5f7fb",
+            BackgroundGray = "#eef1f6",
+            DrawerBackground = "#ffffff",
+            LinesDefault = "#e3e7ee"
+        },
+        PaletteDark = new PaletteDark
+        {
+            Primary = "#5c9ce6",
+            Background = "#15171c",
+            BackgroundGray = "#1d2027",
+            Surface = "#22252d",
+            DrawerBackground = "#1b1d23",
+            AppbarBackground = "#1b1d23"
+        },
+        LayoutProperties = new LayoutProperties
+        {
+            DefaultBorderRadius = "10px"
+        }
+    };
+
+    private void ToggleDrawer()
+    {
+        _drawerOpen = !_drawerOpen;
+    }
+}

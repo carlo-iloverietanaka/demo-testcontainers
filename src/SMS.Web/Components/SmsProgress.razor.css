@@ -1,0 +1,127 @@
+.sms-progress {
+    align-items: flex-start;
+    display: flex;
+}
+
+.sms-progress.compact {
+    align-items: center;
+}
+
+/* ── Nodes ──────────────────────────────────────────────────── */
+.step {
+    align-items: center;
+    display: flex;
+    flex-direction: column;
+    min-width: 28px;
+}
+
+.full .step {
+    min-width: 72px;
+}
+
+.node {
+    align-items: center;
+    background: var(--mud-palette-surface);
+    border: 2px solid var(--mud-palette-lines-default);
+    border-radius: 50%;
+    color: var(--mud-palette-text-disabled);
+    display: flex;
+    height: 28px;
+    justify-content: center;
+    transition: background-color .3s, border-color .3s, color .3s;
+    width: 28px;
+}
+
+.compact .node {
+    border-width: 1.5px;
+    height: 22px;
+    width: 22px;
+}
+
+.step-done .node {
+    background: var(--mud-palette-success);
+    border-color: var(--mud-palette-success);
+    color: var(--mud-palette-success-text);
+}
+
+.step-passed .node {
+    border-color: var(--mud-palette-success);
+    border-style: dashed;
+    color: var(--mud-palette-success);
+}
+
+.step-current .node {
+    animation: pulse 1.6s ease-out infinite;
+    border-color: var(--stage-color);
+    color: var(--stage-color);
+}
+
+.step-skipped .node {
+    border-style: dotted;
+    opacity: .6;
+}
+
+.step-failed .node {
+    background: var(--mud-palette-error);
+    border-color: var(--mud-palette-error);
+    color: var(--mud-palette-error-text);
+}
+
+/* ── Labels ─────────────────────────────────────────────────── */
+.label {
+    color: var(--mud-palette-text-secondary);
+    font-size: .75rem;
+    font-weight: 500;
+    margin-top: 6px;
+}
+
+.step-current .label,
+.step-done .label,
+.step-failed .label {
+    color: var(--mud-palette-text-primary);
+}
+
+.time {
+    color: var(--mud-palette-text-secondary);
+    font-size: .7rem;
+    white-space: nowrap;
+}
+
+/* ── Connectors ─────────────────────────────────────────────── */
+.line {
+    background: var(--mud-palette-lines-default);
+    flex: 1 1 auto;
+    height: 2px;
+    margin-top: 13px;
+    min-width: 12px;
+    transition: background-color .3s;
+}
+
+.compact .line {
+    flex: 0 0 12px;
+    margin-top: 0;
+}
+
+.line-done {
+    background: var(--mud-palette-success);
+}
+
+.line-failed {
+    background: var(--mud-palette-error);
+}
+
+@keyframes pulse {
+    0% {
+        box-shadow: 0 0 0 0 color-mix(in srgb, var(--stage-color) 45%, transparent);
+    }
+
+    100% {
+        box-shadow: 0 0 0 8px transparent;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .step-current .node {
+        animation: none;
+    }
+}

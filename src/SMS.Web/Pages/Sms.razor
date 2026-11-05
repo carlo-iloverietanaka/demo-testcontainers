@@ -1,0 +1,632 @@
+@page "/sms"
+@using SMS.Web.Services
+@implements IAsyncDisposable
+@inject SmsApiClient Api
+@inject ISnackbar Snackbar
+@inject IJSRuntime JS
+
+<PageTitle>SMS Tracker</PageTitle>
+
+<div class="sms-page">
+
+    <div class="page-header">
+        <div>
+            <MudText Typo="Typo.h4" HtmlTag="h1">SMS Tracker</MudText>
+            <MudText Typo="Typo.body2" Color="Color.Secondary">
+                Send an SMS and watch it move through SMS.API, SMS.Publishing and SMS.Sender.
+            </MudText>
+        </div>
+        <div class="live @(InFlight > 0 ? "live-on" : null)">
+            <span class="live-dot"></span>
+            @(InFlight > 0 ? $"Live · checking {InFlight} SMS every {PollSeconds}s" : "Idle · nothing in flight")
+        </div>
+    </div>
+
+    <MudGrid Spacing="3">
+
+        @* ── Compose ─────────────────────────────────────────── *@
+        <MudItem xs="12" lg="7">
+            <MudCard Elevation="0" Outlined="true" Class="h-100">
+                <MudCardHeader>
+                    <CardHeaderAvatar>
+                        <MudAvatar Color="Color.Primary" Variant="Variant.Filled" Size="Size.Medium">
+                            <MudIcon Icon="@Icons.Material.Filled.Edit" />
+                        </MudAvatar>
+                    </CardHeaderAvatar>
+                    <CardHeaderContent>
+                        <MudText Typo="Typo.h6">New message</MudText>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">POST /api/v1/sms</MudText>
+                    </CardHeaderContent>
+                </MudCardHeader>
+                <MudCardContent Class="pt-0">
+                    <MudForm @ref="_formRef" Disabled="_busy">
+                        <MudGrid Spacing="2">
+                            <MudItem xs="12">
+                                <MudTextField @bind-Value="_form.Content" Label="Message" Lines="3" Counter="160"
+                                              Required="true" RequiredError="Write a message"
+                                              Variant="Variant.Outlined" Immediate="true" />
+                            </MudItem>
+                            <MudItem xs="12" sm="6">
+                                <MudTextField @bind-Value="_form.Sender" Label="From" Required="true"
+                                              RequiredError="Sender is required" Variant="Variant.Outlined"
+                                              Margin="Margin.Dense" Adornment="Adornment.Start"
+                                              AdornmentIcon="@Icons.Material.Filled.Person" />
+                            </MudItem>
+                            <MudItem xs="12" sm="6">
+                                <MudTextField @bind-Value="_form.Recipient" Label="To" Required="true"
+                                              RequiredError="Recipient is required" Variant="Variant.Outlined"
+                                              Margin="Margin.Dense" Adornment="Adornment.Start"
+                                              AdornmentIcon="@Icons.Material.Filled.Phone" />
+                            </MudItem>
+                            <MudItem xs="12" sm="4">
+                                <MudSelect T="string" @bind-Value="_form.Medium" Label="Medium" Variant="Variant.Outlined"
+                                           Margin="Margin.Dense" Adornment="Adornment.Start"
+                                           AdornmentIcon="@MediumIcon(_form.Medium)">
+                                    @foreach (var medium in Mediums)
+                                    {
+                                        <MudSelectItem T="string" Value="@medium">@medium</MudSelectItem>
+                                    }
+                                </MudSelect>
+                            </MudItem>
+                            <MudItem xs="12" sm="4">
+                                <MudTextField @bind-Value="_form.ContentType" Label="Content type" Required="true"
+                                              RequiredError="Content type is required" Variant="Variant.Outlined"
+                                              Margin="Margin.Dense" />
+                            </MudItem>
+                            <MudItem xs="12" sm="4">
+                                <MudNumericField T="int" @bind-Value="_form.Count" Label="How many" Min="1" Max="MaxCount"
+                                                 HelperText="@($"1 – {MaxCount}, numbered when > 1")"
+                                                 Variant="Variant.Outlined" Margin="Margin.Dense" />
+                            </MudItem>
+                        </MudGrid>
+                    </MudForm>
+                </MudCardContent>
+                <MudCardActions Class="px-4 pb-4 justify-end">
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" Disabled="_busy"
+                               OnClick="Send" Class="send-button"
+                               StartIcon="@(_busy ? null : Icons.Material.Filled.Send)">
+                        @if (_busy && _progress is not null)
+                        {
+                            <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                            <span>Sending @_progress</span>
+                        }
+                        else
+                        {
+                            <span>@(_form.Count > 1 ? $"Send {_form.Count} SMS" : "Send SMS")</span>
+                        }
+                    </MudButton>
+                </MudCardActions>
+            </MudCard>
+        </MudItem>
+
+        @* ── Track + summary ─────────────────────────────────── *@
+        <MudItem xs="12" lg="5">
+            <div class="side-stack">
+                <MudPaper Elevation="0" Outlined="true" Class="pa-4">
+                    <MudText Typo="Typo.subtitle1" Class="mb-2">Track an existing SMS</MudText>
+                    <MudTextField @bind-Value="_trackExternalId" Placeholder="Paste an external id"
+                                  Variant="Variant.Outlined" Margin="Margin.Dense" Disabled="_busy" Immediate="true"
+                                  OnKeyDown="TrackOnEnter" Adornment="Adornment.End"
+                                  AdornmentIcon="@Icons.Material.Filled.Search" OnAdornmentClick="Track"
+                                  AdornmentAriaLabel="Track" Class="mono-input" />
+                </MudPaper>
+
+                <MudPaper Elevation="0" Outlined="true" Class="pa-4 flex-grow-1">
+                    <MudText Typo="Typo.subtitle1" Class="mb-3">At a glance</MudText>
+                    <div class="stats">
+                        <div class="stat">
+                            <span class="stat-value">@_tracked.Count</span>
+                            <span class="stat-label">Tracked</span>
+                        </div>
+                        <div class="stat" style="--stat-color: var(--mud-palette-warning)">
+                            <span class="stat-value">@InFlight</span>
+                            <span class="stat-label">In flight</span>
+                        </div>
+                        <div class="stat" style="--stat-color: var(--mud-palette-success)">
+                            <span class="stat-value">@_tracked.Count(static x => x.IsFinal && x.Status is not SmsStages.Failed)</span>
+                            <span class="stat-label">Sent</span>
+                        </div>
+                        <div class="stat" style="--stat-color: var(--mud-palette-error)">
+                            <span class="stat-value">@_tracked.Count(static x => x.Status is SmsStages.Failed)</span>
+                            <span class="stat-label">Failed</span>
+                        </div>
+                    </div>
+                    <MudDivider Class="my-3" />
+                    <div class="d-flex align-center gap-2">
+                        <MudIcon Icon="@Icons.Material.Filled.Timer" Size="Size.Small" Color="Color.Secondary" />
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">
+                            Average time to Published:
+                            <strong>@(AverageToPublished is { } average ? SmsStages.Duration(average) : "—")</strong>
+                        </MudText>
+                    </div>
+                </MudPaper>
+            </div>
+        </MudItem>
+
+        @* ── Pipeline ────────────────────────────────────────── *@
+        <MudItem xs="12">
+            <MudPaper Elevation="0" Outlined="true" Class="pa-4">
+                <div class="toolbar">
+                    <MudText Typo="Typo.h6">Pipeline</MudText>
+                    <MudSpacer />
+                    <MudTextField @bind-Value="_search" Placeholder="Search id, recipient or message" Immediate="true"
+                                  Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true"
+                                  Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                                  Class="search" />
+                    <MudTooltip Text="Refresh all">
+                        <MudIconButton Icon="@Icons.Material.Filled.Refresh" Disabled="@(_tracked.Count is 0)"
+                                       aria-label="Refresh all" OnClick="RefreshAll" />
+                    </MudTooltip>
+                    <MudTooltip Text="Stop tracking all">
+                        <MudIconButton Icon="@Icons.Material.Filled.ClearAll" Disabled="@(_tracked.Count is 0)"
+                                       aria-label="Stop tracking all" OnClick="Clear" />
+                    </MudTooltip>
+                </div>
+
+                <MudTable T="TrackedSms" Items="Visible" Elevation="0" Hover="true" FixedHeader="true"
+                          Height="560px" Breakpoint="Breakpoint.Sm" OnRowClick="args => { if (args.Item is not null) Open(args.Item); }"
+                          RowClass="clickable-row" RowStyleFunc="RowStyle">
+                    <HeaderContent>
+                        <MudTh>Tracked</MudTh>
+                        <MudTh>External ID</MudTh>
+                        <MudTh>Recipient</MudTh>
+                        <MudTh>Message</MudTh>
+                        <MudTh>Progress</MudTh>
+                        <MudTh>Status</MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="Tracked">
+                            <MudText Typo="Typo.body2">@context.TrackedAt.ToString("HH:mm:ss")</MudText>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                @(context.SentHere ? "sent here" : "looked up")
+                            </MudText>
+                        </MudTd>
+                        <MudTd DataLabel="External ID">
+                            <span class="mono">@Short(context.ExternalId)</span>
+                        </MudTd>
+                        <MudTd DataLabel="Recipient">
+                            <MudText Typo="Typo.body2">@context.Recipient</MudText>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">via @context.Medium</MudText>
+                        </MudTd>
+                        <MudTd DataLabel="Message">
+                            <span class="content-cell" title="@context.Content">@context.Content</span>
+                        </MudTd>
+                        <MudTd DataLabel="Progress">
+                            <SmsProgress Sms="context" Compact="true" />
+                        </MudTd>
+                        <MudTd DataLabel="Status">
+                            <MudChip T="string" Size="Size.Small" Variant="Variant.Filled"
+                                     Color="@(SmsStages.Find(context.Status)?.Color ?? Color.Default)">
+                                @context.Status
+                            </MudChip>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block">
+                                for @SmsStages.Duration(Now - context.StatusSince)
+                            </MudText>
+                        </MudTd>
+                    </RowTemplate>
+                    <NoRecordsContent>
+                        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="pa-6">
+                            @(_tracked.Count is 0 ? "Nothing tracked yet." : "No SMS match the filter.")
+                        </MudText>
+                    </NoRecordsContent>
+                </MudTable>
+            </MudPaper>
+        </MudItem>
+
+    </MudGrid>
+
+    @* ── Details ─────────────────────────────────────────────── *@
+    <MudDrawer @bind-Open="_detailsOpen" Anchor="Anchor.End" Variant="@DrawerVariant.Temporary" Width="440px"
+               Elevation="4">
+        @if (Selected is { } selected)
+        {
+            var stage = SmsStages.Find(selected.Status);
+
+            <div class="details" style="--stage-color: @(stage?.CssColor ?? "var(--mud-palette-info)")">
+                <div class="details-header">
+                    <div>
+                        <MudText Typo="Typo.overline" Color="Color.Secondary">SMS to</MudText>
+                        <MudText Typo="Typo.h6">@selected.Recipient</MudText>
+                    </div>
+                    <MudIconButton Icon="@Icons.Material.Filled.Close" aria-label="Close details"
+                                   OnClick="() => _detailsOpen = false" />
+                </div>
+
+                <div class="where">
+                    <div class="where-icon">
+                        <MudIcon Icon="@(stage?.Icon ?? Icons.Material.Filled.HelpOutline)" />
+                    </div>
+                    <div>
+                        <div class="where-title">
+                            @selected.Status
+                            <span class="where-since">for @SmsStages.Duration(Now - selected.StatusSince)</span>
+                        </div>
+                        <div class="where-text">@(stage?.Where ?? $"Unknown status '{selected.Status}'.")</div>
+                    </div>
+                </div>
+
+                <SmsProgress Sms="selected" />
+
+                <MudText Typo="Typo.subtitle2" Class="mt-6 mb-2">History</MudText>
+                <MudTimeline TimelinePosition="TimelinePosition.Start" Class="history">
+                    @for (var index = 0; index < selected.History.Count; index++)
+                    {
+                        var change = selected.History[index];
+                        var until = index + 1 < selected.History.Count ? selected.History[index + 1].At : (DateTime?)null;
+                        var changeStage = SmsStages.Find(change.Status);
+
+                        <MudTimelineItem Color="@(changeStage?.Color ?? Color.Default)" Size="Size.Small" Elevation="0">
+                            <MudText Typo="Typo.body2"><strong>@change.Status</strong> at @change.At.ToString("HH:mm:ss")</MudText>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                @if (until is { } next)
+                                {
+                                    <span>stayed @SmsStages.Duration(next - change.At)</span>
+                                }
+                                else if (selected.IsFinal)
+                                {
+                                    <span>final</span>
+                                }
+                                else
+                                {
+                                    <span>@SmsStages.Duration(Now - change.At) so far</span>
+                                }
+                            </MudText>
+                        </MudTimelineItem>
+                    }
+                </MudTimeline>
+                @if (!selected.SentHere)
+                {
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                        Looked up by id, so steps before @selected.History[0].Status were not observed.
+                    </MudText>
+                }
+
+                <MudText Typo="Typo.subtitle2" Class="mt-6 mb-2">Message</MudText>
+                <div class="message">@selected.Content</div>
+
+                <dl class="facts">
+                    <dt>External ID</dt>
+                    <dd>
+                        <span class="mono">@selected.ExternalId</span>
+                        <MudIconButton Icon="@(_copiedExternalId == selected.ExternalId ? Icons.Material.Filled.Check : Icons.Material.Filled.ContentCopy)"
+                                       Size="Size.Small" aria-label="Copy external id"
+                                       OnClick="() => Copy(selected.ExternalId)" />
+                    </dd>
+                    <dt>From</dt>
+                    <dd>@selected.Sender</dd>
+                    <dt>Medium</dt>
+                    <dd>@selected.Medium</dd>
+                    <dt>Content type</dt>
+                    <dd>@selected.ContentType</dd>
+                    <dt>Last checked</dt>
+                    <dd>@selected.CheckedAt.ToString("HH:mm:ss")</dd>
+                </dl>
+
+                @if (selected.Error is { Length: > 0 })
+                {
+                    <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-3">@selected.Error</MudAlert>
+                }
+
+                <div class="details-actions">
+                    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Refresh"
+                               OnClick="() => RefreshOne(selected)">
+                        Refresh
+                    </MudButton>
+                    <MudButton Variant="Variant.Text" Color="Color.Error" StartIcon="@Icons.Material.Filled.VisibilityOff"
+                               OnClick="() => Untrack(selected)">
+                        Stop tracking
+                    </MudButton>
+                </div>
+            </div>
+        }
+    </MudDrawer>
+
+</div>
+
+@code {
+    private const int MaxCount = 50;
+    private const int MaxTracked = 200;
+    private const int PollSeconds = 2;
+
+    private static readonly string[] Mediums = ["sms", "email", "notification"];
+
+    private readonly SendForm _form = new();
+    private readonly List<TrackedSms> _tracked = [];
+    private readonly CancellationTokenSource _cancellation = new();
+
+    private MudForm _formRef = null!;
+    private bool _busy;
+    private string? _progress;
+    private string? _trackExternalId;
+    private string? _copiedExternalId;
+    private string? _search;
+    private bool _detailsOpen;
+    private string? _selectedId;
+
+    private sealed class SendForm
+    {
+        public string Sender { get; set; } = "SMS.Web";
+        public string Recipient { get; set; } = "+639170000000";
+        public string Medium { get; set; } = "sms";
+        public string ContentType { get; set; } = "text/plain";
+        public string Content { get; set; } = "Hello from SMS.Web";
+        public int Count { get; set; } = 1;
+    }
+
+    private static DateTime Now => DateTime.Now;
+
+    private int InFlight => _tracked.Count(static x => !x.IsFinal);
+
+    private TrackedSms? Selected => _tracked.FirstOrDefault(x => x.ExternalId == _selectedId);
+
+    private IEnumerable<TrackedSms> Visible
+    {
+        get
+        {
+            var search = _search?.Trim();
+
+            return string.IsNullOrEmpty(search)
+                ? _tracked
+                : _tracked.Where(x => x.ExternalId.Contains(search, StringComparison.OrdinalIgnoreCase)
+                                      || x.Recipient.Contains(search, StringComparison.OrdinalIgnoreCase)
+                                      || x.Content.Contains(search, StringComparison.OrdinalIgnoreCase));
+        }
+    }
+
+    private TimeSpan? AverageToPublished
+    {
+        get
+        {
+            var durations = _tracked
+                .Where(static x => x.SentHere)
+                .Select(static x => x.SeenAt("Published") - x.TrackedAt)
+                .OfType<TimeSpan>()
+                .ToList();
+
+            return durations.Count is 0 ? null : TimeSpan.FromTicks((long)durations.Average(static x => x.Ticks));
+        }
+    }
+
+    protected override void OnInitialized()
+    {
+        _ = PollAsync(_cancellation.Token);
+    }
+
+    private async Task PollAsync(CancellationToken token)
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(PollSeconds));
+
+        try
+        {
+            while (await timer.WaitForNextTickAsync(token))
+            {
+                var pending = _tracked.Where(static x => !x.IsFinal).ToList();
+
+                if (pending.Count is 0)
+                {
+                    continue;
+                }
+
+                await Task.WhenAll(pending.Select(x => Refresh(x, token)));
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // the page was left
+        }
+    }
+
+    private async Task Send()
+    {
+        if (_busy)
+        {
+            return;
+        }
+
+        await _formRef.ValidateAsync();
+
+        if (!_formRef.IsValid)
+        {
+            return;
+        }
+
+        _form.Count = Math.Clamp(_form.Count, 1, MaxCount);
+        _busy = true;
+
+        var count = _form.Count;
+        var created = 0;
+        string? lastError = null;
+
+        try
+        {
+            for (var index = 0; index < count; index++)
+            {
+                _progress = $"{index + 1} / {count}";
+                StateHasChanged();
+
+                var content = count is 1 ? _form.Content : $"{_form.Content} #{index + 1}";
+                var input = new SmsCreateInput(content, _form.ContentType, _form.Sender, _form.Recipient, _form.Medium);
+                var result = await Api.CreateSms(input);
+
+                if (result is { Succeeded: true, Sms: not null })
+                {
+                    Add(result.Sms, sentHere: true);
+                    created++;
+                }
+                else
+                {
+                    lastError = result.ErrorMessage;
+                }
+            }
+
+            if (created == count)
+            {
+                Snackbar.Add(count is 1 ? "SMS created. Follow it on the board." : $"{count} SMS created. Follow them on the board.",
+                    Severity.Success);
+            }
+            else
+            {
+                Snackbar.Add($"{created} of {count} created — {lastError}", Severity.Error);
+            }
+        }
+        finally
+        {
+            _busy = false;
+            _progress = null;
+        }
+    }
+
+    private async Task TrackOnEnter(KeyboardEventArgs args)
+    {
+        if (args.Key is "Enter")
+        {
+            await Track();
+        }
+    }
+
+    private async Task Track()
+    {
+        var externalId = _trackExternalId?.Trim();
+
+        if (string.IsNullOrEmpty(externalId) || _busy)
+        {
+            return;
+        }
+
+        if (_tracked.FirstOrDefault(x => x.ExternalId == externalId) is { } existing)
+        {
+            _trackExternalId = null;
+            Open(existing);
+            return;
+        }
+
+        _busy = true;
+
+        try
+        {
+            var result = await Api.GetSms(externalId);
+
+            if (result is { Succeeded: true, Sms: not null })
+            {
+                var entry = Add(result.Sms, sentHere: false);
+                _trackExternalId = null;
+                Open(entry);
+            }
+            else
+            {
+                Snackbar.Add(result.ErrorMessage ?? $"Could not find {externalId}.", Severity.Error);
+            }
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private TrackedSms Add(SmsOutput sms, bool sentHere)
+    {
+        var entry = new TrackedSms { ExternalId = sms.ExternalId, TrackedAt = Now, SentHere = sentHere };
+        entry.Apply(sms, entry.TrackedAt);
+
+        _tracked.Insert(0, entry);
+
+        if (_tracked.Count > MaxTracked)
+        {
+            _tracked.RemoveRange(MaxTracked, _tracked.Count - MaxTracked);
+        }
+
+        return entry;
+    }
+
+    private async Task Refresh(TrackedSms entry, CancellationToken token = default)
+    {
+        var result = await Api.GetSms(entry.ExternalId, token);
+
+        if (result is { Succeeded: true, Sms: not null })
+        {
+            entry.Apply(result.Sms, Now);
+            return;
+        }
+
+        entry.Error = result.ErrorMessage;
+        entry.CheckedAt = Now;
+    }
+
+    private async Task RefreshOne(TrackedSms entry)
+    {
+        await Refresh(entry);
+    }
+
+    private async Task RefreshAll()
+    {
+        await Task.WhenAll(_tracked.Select(x => Refresh(x)));
+    }
+
+    private void Clear()
+    {
+        _tracked.Clear();
+        _detailsOpen = false;
+    }
+
+    private void Untrack(TrackedSms entry)
+    {
+        _tracked.Remove(entry);
+        _detailsOpen = false;
+    }
+
+    private void Open(TrackedSms entry)
+    {
+        _selectedId = entry.ExternalId;
+        _detailsOpen = true;
+    }
+
+    private void OpenOnEnter(KeyboardEventArgs args, TrackedSms entry)
+    {
+        if (args.Key is "Enter" or " ")
+        {
+            Open(entry);
+        }
+    }
+
+    private async Task Copy(string externalId)
+    {
+        await JS.InvokeVoidAsync("navigator.clipboard.writeText", externalId);
+
+        _copiedExternalId = externalId;
+        StateHasChanged();
+
+        await Task.Delay(1500);
+
+        if (_copiedExternalId == externalId)
+        {
+            _copiedExternalId = null;
+            StateHasChanged();
+        }
+    }
+    private static string Short(string externalId)
+    {
+        return externalId.Length > 8 ? externalId[..8] : externalId;
+    }
+
+    private static string MediumIcon(string medium)
+    {
+        return medium switch
+        {
+            "email" => Icons.Material.Filled.Email,
+            "notification" => Icons.Material.Filled.Notifications,
+            _ => Icons.Material.Filled.Sms
+        };
+    }
+
+    private static string RowStyle(TrackedSms entry, int _)
+    {
+        return entry.Status is SmsStages.Failed ? "background-color: var(--mud-palette-error-hover);" : "";
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await _cancellation.CancelAsync();
+        _cancellation.Dispose();
+    }
+}

@@ -1,0 +1,88 @@
+@using SMS.Web.Tracking
+
+<div class="sms-progress @(Compact ? "compact" : "full")">
+    @for (var index = 0; index < SmsStages.Flow.Length; index++)
+    {
+        var stage = SmsStages.Flow[index];
+        var state = Sms.StateOf(index);
+
+        if (index > 0)
+        {
+            <div class="line @(state is StepState.Done or StepState.Passed or StepState.Current ? "line-done" : null)"></div>
+        }
+
+        <MudTooltip Text="@Tooltip(stage, state)">
+            <div class="step step-@state.ToString().ToLowerInvariant()" style="--stage-color: @stage.CssColor">
+                <div class="node">
+                    <MudIcon Icon="@NodeIcon(stage, state)" Size="Size.Small" />
+                </div>
+                @if (!Compact)
+                {
+                    <div class="label">@stage.Status</div>
+                    <div class="time">@Time(stage, state)</div>
+                }
+            </div>
+        </MudTooltip>
+    }
+
+    @if (Sms.Status is SmsStages.Failed)
+    {
+        var failed = SmsStages.FailedStage;
+
+        <div class="line line-failed"></div>
+        <MudTooltip Text="@($"Failed — {failed.Where}")">
+            <div class="step step-failed" style="--stage-color: @failed.CssColor">
+                <div class="node">
+                    <MudIcon Icon="@Icons.Material.Filled.Close" Size="Size.Small" />
+                </div>
+                @if (!Compact)
+                {
+                    <div class="label">Failed</div>
+                    <div class="time">@Sms.SeenAt(SmsStages.Failed)?.ToString("HH:mm:ss")</div>
+                }
+            </div>
+        </MudTooltip>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public TrackedSms Sms { get; set; } = null!;
+
+    // Icons only, for table rows; the full version adds labels and observed times.
+    [Parameter]
+    public bool Compact { get; set; }
+
+    private static string NodeIcon(SmsStage stage, StepState state)
+    {
+        return state switch
+        {
+            StepState.Done or StepState.Passed => Icons.Material.Filled.Check,
+            _ => stage.Icon
+        };
+    }
+
+    private string Time(SmsStage stage, StepState state)
+    {
+        return state switch
+        {
+            StepState.Passed => "between checks",
+            StepState.Skipped => "skipped",
+            _ => Sms.SeenAt(stage.Status)?.ToString("HH:mm:ss") ?? "—"
+        };
+    }
+
+    private static string Tooltip(SmsStage stage, StepState state)
+    {
+        var text = state switch
+        {
+            StepState.Current => "in progress",
+            StepState.Done => "done",
+            StepState.Passed => "passed between two checks",
+            StepState.Skipped => "skipped",
+            _ => "not reached"
+        };
+
+        return $"{stage.Status} ({stage.Owner}) — {text}";
+    }
+}
