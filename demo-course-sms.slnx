@@ -2,11 +2,19 @@
   <Folder Name="/src/">
     <Project Path="src/SMS.API/SMS.API.csproj" />
     <Project Path="src/SMS.Application/SMS.Application.csproj" />
+    <Project Path="src/SMS.Broker.Contracts/SMS.Broker.Contracts.csproj" />
     <Project Path="src/SMS.Domain/SMS.Domain.csproj" />
     <Project Path="src/SMS.Infrastructure/SMS.Infrastructure.csproj" />
     <Project Path="src/SMS.Migration/SMS.Migration.csproj" />
+    <Project Path="src/SMS.Sender/SMS.Sender.csproj" />
+    <Project Path="src/SMS.Publishing/SMS.Publishing.csproj" />
+    <Project Path="src/SMS.Web/SMS.Web.csproj" />
   </Folder>
   <Folder Name="/src/AppHost/">
     <Project Path="src/AppHost/AppHost.SMS/AppHost.SMS.csproj" />
+  </Folder>
+  <Folder Name="/test/">
+    <Project Path="test/SMS.Infrastructure.Test/SMS.Infrastructure.Test.csproj" />
+    <Project Path="test/SMS.Messaging.Test/SMS.Messaging.Test.csproj" />
   </Folder>
 </Solution>
