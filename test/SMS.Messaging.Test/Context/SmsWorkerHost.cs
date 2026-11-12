@@ -32,22 +32,22 @@ public sealed class SmsWorkerHost : IAsyncDisposable
         await worker.StartAsync(TestContext.Current.CancellationToken);
     }
 
-    public async Task StartSmsPublishedWorker()
+    public async Task StartSmsSendingWorker()
     {
-        var logger = NullLogger<SmsPublishedWorker>.Instance;
-        var connect = new PublishBrokerConnection(_fixture.Connection);
-        var worker = new SmsPublishedWorker(logger, connect, _scopeFactory);
+        var logger = NullLogger<SmsSendingWorker>.Instance;
+        var connect = new SenderBrokerConnection(_fixture.Connection);
+        var worker = new SmsSendingWorker(logger, connect);
         
         _workers.Add(worker);
 
         await worker.StartAsync(TestContext.Current.CancellationToken);
     }
 
-    public async Task StartSmsSendingWorker()
+    public async Task StartSmsPublishedWorker()
     {
-        var logger = NullLogger<SmsSendingWorker>.Instance;
-        var connect = new SenderBrokerConnection(_fixture.Connection);
-        var worker = new SmsSendingWorker(logger, connect);
+        var logger = NullLogger<SmsPublishedWorker>.Instance;
+        var connect = new PublishBrokerConnection(_fixture.Connection);
+        var worker = new SmsPublishedWorker(logger, connect, _scopeFactory);
         
         _workers.Add(worker);
 
