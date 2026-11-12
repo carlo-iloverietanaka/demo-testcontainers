@@ -41,24 +41,6 @@ public class RabbitmqFixture : IAsyncLifetime
         
         await _container.DisposeAsync();
     }
-
-    // public async Task<uint> MessageCountAsync(string queue)
-    // {
-    //     await using var channel = await Connection.CreateChannelAsync();
-    //
-    //     var declared = await channel.QueueDeclarePassiveAsync(queue);
-    //
-    //     return declared.MessageCount;
-    // }
-    //
-    // public async Task<uint> ConsumerCountAsync(string queue)
-    // {
-    //     await using var channel = await Connection.CreateChannelAsync();
-    //
-    //     var declared = await channel.QueueDeclarePassiveAsync(queue);
-    //
-    //     return declared.ConsumerCount;
-    // }
 }
 
 [CollectionDefinition(nameof(BrokerCollection))]
