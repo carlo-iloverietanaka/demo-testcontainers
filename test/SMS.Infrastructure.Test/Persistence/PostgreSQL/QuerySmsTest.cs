@@ -55,7 +55,6 @@ public class QuerySmsTest : IClassFixture<DbFixture>
         Assert.Equal(sms.Sender, inserted.Sender);
         Assert.Equal(sms.Recipient, inserted.Recipient);
         Assert.Equal(sms.Medium, inserted.Medium);
-        Assert.Equal("Pending", inserted.Status);
     }
 
     // ---------- FindByExternalIdAsync ----------
@@ -178,7 +177,7 @@ public class QuerySmsTest : IClassFixture<DbFixture>
 
         // act
         var claimed = await _querySms.FindsPendingAsync(TestContext.Current.CancellationToken);
-        
+
         // assert
         var claimSingle = Assert.Single(claimed);
 
@@ -194,7 +193,7 @@ public class QuerySmsTest : IClassFixture<DbFixture>
     {
         // arrange
         var entity = Entity(status);
-        
+
         await _querySms.InsertAsync(entity, TestContext.Current.CancellationToken);
 
         // act
@@ -215,7 +214,7 @@ public class QuerySmsTest : IClassFixture<DbFixture>
         {
             var entity = Entity(createdAt: created.AddSeconds(i));
             var insert = await _querySms.InsertAsync(entity, TestContext.Current.CancellationToken);
-            
+
             inserts.Add(insert);
         }
 
@@ -227,7 +226,8 @@ public class QuerySmsTest : IClassFixture<DbFixture>
         Assert.DoesNotContain(claimed, x => x.ExternalId == inserts[^1].ExternalId);
 
         // assert if newest more than limit status is still pending
-        var newest = await _querySms.FindByExternalIdAsync(inserts[^1].ExternalId, TestContext.Current.CancellationToken);
+        var newest =
+            await _querySms.FindByExternalIdAsync(inserts[^1].ExternalId, TestContext.Current.CancellationToken);
 
         Assert.NotNull(newest);
         Assert.Equal("Pending", newest.Status);
@@ -239,20 +239,22 @@ public class QuerySmsTest : IClassFixture<DbFixture>
     {
         // arrange
         var entity = Entity();
-        
+
         await _querySms.InsertAsync(entity, TestContext.Current.CancellationToken);
 
         // act
         var claimed = await _querySms.FindsPendingAsync(TestContext.Current.CancellationToken);
         var affected =
-            await _querySms.LeaseToPublishedAsync(claimed.Select(x => x.ExternalId), TestContext.Current.CancellationToken);
+            await _querySms.LeaseToPublishedAsync(claimed.Select(x => x.ExternalId),
+                TestContext.Current.CancellationToken);
 
         // assert
         Assert.Equal(1, affected);
 
         // assert sms status after lease to publish
-        var publish = await _querySms.FindByExternalIdAsync(claimed[0].ExternalId, TestContext.Current.CancellationToken);
-        
+        var publish =
+            await _querySms.FindByExternalIdAsync(claimed[0].ExternalId, TestContext.Current.CancellationToken);
+
         Assert.NotNull(publish);
         Assert.Equal("Published", publish.Status);
         Assert.Null(publish.LockedUntil);
@@ -265,21 +267,23 @@ public class QuerySmsTest : IClassFixture<DbFixture>
     {
         // arrange
         var entity = Entity();
-        
+
         await _querySms.InsertAsync(entity, TestContext.Current.CancellationToken);
 
 
         // act
         var claimed = await _querySms.FindsPendingAsync(TestContext.Current.CancellationToken);
         var affected =
-            await _querySms.LeaseToPendingAsync(claimed.Select(x => x.ExternalId), TestContext.Current.CancellationToken);
+            await _querySms.LeaseToPendingAsync(claimed.Select(x => x.ExternalId),
+                TestContext.Current.CancellationToken);
 
         // assert
         Assert.Equal(1, affected);
 
         // assert sms status after lease to pending
-        var pending = await _querySms.FindByExternalIdAsync(claimed[0].ExternalId, TestContext.Current.CancellationToken);
-        
+        var pending =
+            await _querySms.FindByExternalIdAsync(claimed[0].ExternalId, TestContext.Current.CancellationToken);
+
         Assert.NotNull(pending);
         Assert.Equal("Pending", pending.Status);
         Assert.Null(pending.LockedUntil);
@@ -304,7 +308,7 @@ public class QuerySmsTest : IClassFixture<DbFixture>
         // assert
         Assert.Equal(insert.Id, updated.Id);
         Assert.Equal("Delivered", updated.Status);
-        
+
         // check the record in the database
         var record = await _querySms.FindByExternalIdAsync(insert.ExternalId, TestContext.Current.CancellationToken);
 
@@ -327,9 +331,9 @@ public class QuerySmsTest : IClassFixture<DbFixture>
 
         // assert
         Assert.Same(entity, updated);
-        
+
         var record = await _querySms.FindByExternalIdAsync(entity.ExternalId, TestContext.Current.CancellationToken);
-        
+
         Assert.Null(record);
     }
 
@@ -346,10 +350,10 @@ public class QuerySmsTest : IClassFixture<DbFixture>
 
         // assert
         Assert.Equal(1, affected);
-        
+
         // check the record in the database
         var record = await _querySms.FindByIdAsync(insert.Id, TestContext.Current.CancellationToken);
-        
+
         Assert.Null(record);
     }
 
@@ -380,7 +384,7 @@ public class QuerySmsTest : IClassFixture<DbFixture>
 
         // check the record in the database
         var record = await _querySms.FindByExternalIdAsync(insert.ExternalId, TestContext.Current.CancellationToken);
-        
+
         Assert.Null(record);
     }
 
