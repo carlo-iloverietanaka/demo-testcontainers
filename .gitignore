@@ -8,3 +8,6 @@ TestResults/
 # user-specific files
 *.user
 *.DotSettings.user
+
+# idea
+.idea/
